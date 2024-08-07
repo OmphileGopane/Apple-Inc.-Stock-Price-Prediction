@@ -1,1 +1,1 @@
-# Apple-Inc.-Stock-Price-Prediction
+# AppleStockPrediction-ML
