@@ -1,0 +1,94 @@
+# Importing libraries
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from xgboost import XGBRegressor
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM
+from tensorflow.keras.callbacks import EarlyStopping
+import shap
+
+# Step 1: Data Collection and Preparation
+# Assuming you have your dataset stored in a CSV file named 'apple_stock_data.csv'
+data = pd.read_csv('HistoricalQuotes.csv')
+
+# Preprocessing the data
+# Drop rows with missing values
+data.dropna(inplace=True)
+
+# Check the column names
+print(data.columns)
+
+# It seems like the column names have leading/trailing whitespaces, let's strip them
+data.columns = data.columns.str.strip()
+
+# Now, let's preprocess the 'Volume' column to remove non-numeric characters and leading/trailing spaces
+data['Volume'] = data['Volume'].astype(str).str.replace(r'\D', '', regex=True)  # Remove non-numeric characters
+data['Volume'] = data['Volume'].str.strip()  # Remove leading/trailing spaces
+
+# Convert 'Volume' column to numeric
+data['Volume'] = pd.to_numeric(data['Volume'])
+
+# Drop rows with missing values after conversion
+data.dropna(inplace=True)
+
+# Splitting the dataset into features and target variable
+X = data.drop(columns=['Date', 'Close/Last'])  # Assuming 'Date' and 'Close' are irrelevant for prediction
+y = data['Close/Last']  # Assuming 'Close/Last' is the target column
+
+# Splitting the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Step 2: Feature Engineering
+# Scaling features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# Step 3: Model Selection and Building
+# XGBoost model
+xgb_model = XGBRegressor()
+xgb_model.fit(X_train_scaled, y_train)
+
+# LSTM model
+X_train_lstm = X_train_scaled.reshape((X_train_scaled.shape[0], 1, X_train_scaled.shape[1]))
+X_test_lstm = X_test_scaled.reshape((X_test_scaled.shape[0], 1, X_test_scaled.shape[1]))
+
+lstm_model = Sequential()
+lstm_model.add(LSTM(50, input_shape=(X_train_lstm.shape[1], X_train_lstm.shape[2])))
+lstm_model.add(Dense(1))
+lstm_model.compile(optimizer='adam', loss='mse')
+
+# Training the LSTM model with early stopping
+early_stopping = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+history = lstm_model.fit(X_train_lstm, y_train, epochs=100, batch_size=32, validation_split=0.2, callbacks=[early_stopping])
+
+# Step 4: Interpretability
+# SHAP explanation for XGBoost model
+explainer = shap.Explainer(xgb_model)
+shap_values = explainer.shap_values(X_train)
+
+# Step 5: Evaluation and Testing
+# Evaluating XGBoost model
+y_pred_xgb = xgb_model.predict(X_test_scaled)
+mse_xgb = mean_squared_error(y_test, y_pred_xgb)
+mae_xgb = mean_absolute_error(y_test, y_pred_xgb)
+print("XGBoost Model Evaluation:")
+print("Mean Squared Error:", mse_xgb)
+print("Mean Absolute Error:", mae_xgb)
+
+# Evaluating LSTM model
+y_pred_lstm = lstm_model.predict(X_test_lstm)
+mse_lstm = mean_squared_error(y_test, y_pred_lstm)
+mae_lstm = mean_absolute_error(y_test, y_pred_lstm)
+print("\nLSTM Model Evaluation:")
+print("Mean Squared Error:", mse_lstm)
+print("Mean Absolute Error:", mae_lstm)
+
+# Step 6: Optimization and Refinement (Optional)
+
+# Step 7: Deployment and Monitoring (Optional)
